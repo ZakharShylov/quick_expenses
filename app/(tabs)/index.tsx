@@ -1,19 +1,57 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { FadeInUp, LinearTransition } from 'react-native-reanimated';
 
+import { getTotal } from '@/src/db/analytics';
 import { getAllTransactions, Transaction } from '@/src/db/transactions';
+import { colors, radius, spacing } from '@/src/theme';
+import { getDateRange } from '@/src/utils/dateRanges';
+import { AppText } from '@/src/ui/AppText';
+import { Card } from '@/src/ui/Card';
+import { Screen } from '@/src/ui/Screen';
+
+function isDateInRange(dateValue: string, fromISO: string, toISO: string) {
+  if (dateValue >= fromISO && dateValue < toISO) {
+    return true;
+  }
+
+  const parsedDate = new Date(dateValue);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return false;
+  }
+
+  return parsedDate >= new Date(fromISO) && parsedDate < new Date(toISO);
+}
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [todayTransactions, setTodayTransactions] = useState<Transaction[]>([]);
+  const [totalToday, setTotalToday] = useState(0);
   const [loadError, setLoadError] = useState('');
 
-  const loadTransactions = useCallback(async () => {
+  const formattedDate = new Date().toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const loadHomeData = useCallback(async () => {
     try {
       setLoadError('');
-      const allTransactions = await getAllTransactions();
-      setTransactions(allTransactions.slice(0, 10));
+
+      const { fromISO, toISO } = getDateRange('day');
+      const [allTransactions, todayTotal] = await Promise.all([
+        getAllTransactions(),
+        getTotal(fromISO, toISO),
+      ]);
+
+      const filtered = allTransactions
+        .filter((item) => isDateInRange(item.date, fromISO, toISO))
+        .slice(0, 10);
+
+      setTodayTransactions(filtered);
+      setTotalToday(todayTotal);
     } catch {
       setLoadError('Не удалось загрузить расходы');
     }
@@ -21,104 +59,158 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void loadTransactions();
-    }, [loadTransactions])
+      void loadHomeData();
+    }, [loadHomeData])
   );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Quick Expense</Text>
-      {!!loadError && <Text style={styles.errorText}>{loadError}</Text>}
+    <Screen contentStyle={styles.content}>
+      <View style={styles.header}>
+        <AppText variant="title">{formattedDate}</AppText>
+        <AppText variant="title" color={colors.textSecondary} style={styles.headerArrow}>
+          ›
+        </AppText>
+      </View>
 
-      {transactions.length === 0 ? (
-        <Text style={styles.emptyText}>Пока нет расходов</Text>
+      <View style={styles.divider} />
+
+      <Animated.View
+        entering={FadeInUp.duration(280).withInitialValues({
+          opacity: 0,
+          transform: [{ translateY: 10 }],
+        })}>
+        <Card style={styles.todayCard}>
+          <AppText variant="subtitle" color={colors.textSecondary}>
+            Траты за сегодня
+          </AppText>
+          <AppText style={styles.todayTotal}>
+            {totalToday.toLocaleString('ru-RU', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </AppText>
+        </Card>
+      </Animated.View>
+
+      {!!loadError && (
+        <AppText variant="caption" color={colors.danger} style={styles.errorText}>
+          {loadError}
+        </AppText>
+      )}
+
+      {todayTransactions.length === 0 ? (
+        <AppText variant="body" color={colors.textSecondary} style={styles.emptyText}>
+          Пока нет расходов
+        </AppText>
       ) : (
-        <FlatList
-          data={transactions}
-          keyExtractor={(item) => item.id}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
-            <View style={styles.row}>
-              <Text style={styles.rowLeftText}>
-                {item.itemName ? `${item.category} - ${item.itemName}` : item.category}
-              </Text>
-              <Text style={styles.rowAmount}>{item.amount.toFixed(2)}</Text>
-            </View>
-          )}
-        />
+        <View style={styles.list}>
+          {todayTransactions.map((item, index) => (
+            <Animated.View
+              key={item.id}
+              layout={LinearTransition.duration(260)}
+              entering={FadeInUp.duration(220)
+                .delay(Math.min(index * 35, 180))
+                .withInitialValues({
+                  opacity: 0,
+                  transform: [{ translateY: 8 }],
+                })}>
+              <Card style={styles.rowCard}>
+                <View style={styles.row}>
+                  <AppText variant="body" style={styles.rowLeftText}>
+                    {item.itemName ? `${item.category} - ${item.itemName}` : item.category}
+                  </AppText>
+                  <AppText variant="body" style={styles.rowAmount}>
+                    {item.amount.toFixed(2)}
+                  </AppText>
+                </View>
+              </Card>
+            </Animated.View>
+          ))}
+        </View>
       )}
 
       <Pressable style={styles.fab} onPress={() => router.push('/add-expense')}>
-        <Text style={styles.fabText}>+</Text>
+        <AppText style={styles.fabText}>+</AppText>
       </Pressable>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingTop: 40,
+  content: {
+    position: 'relative',
+    paddingBottom: spacing.xxxl + spacing.xxl,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerArrow: {
+    marginTop: spacing.xs,
+  },
+  divider: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  todayCard: {
+    padding: spacing.lg,
+  },
+  todayTotal: {
+    marginTop: spacing.xs,
+    fontSize: 38,
+    lineHeight: 42,
+    fontWeight: '800',
+    color: colors.textPrimary,
   },
   errorText: {
-    marginTop: 8,
-    color: '#b00020',
+    marginTop: spacing.sm,
   },
   emptyText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#555',
+    marginTop: spacing.md,
   },
   list: {
-    marginTop: 16,
+    marginTop: spacing.md,
+    gap: spacing.sm,
   },
-  listContent: {
-    paddingBottom: 100,
-    gap: 10,
+  rowCard: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
-    borderRadius: 8,
   },
   rowLeftText: {
     flex: 1,
-    paddingRight: 12,
-    fontSize: 15,
-    color: '#222',
+    marginRight: spacing.md,
   },
   rowAmount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111',
+    fontWeight: '700',
   },
   fab: {
     position: 'absolute',
-    right: 20,
-    bottom: 24,
+    right: spacing.xl,
+    bottom: spacing.xl,
     width: 56,
     height: 56,
-    borderRadius: 28,
-    backgroundColor: '#111',
+    borderRadius: radius.round,
+    backgroundColor: colors.fab,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 4,
   },
   fabText: {
-    color: '#fff',
-    fontSize: 28,
+    color: colors.white,
+    fontSize: 30,
     lineHeight: 30,
-    fontWeight: '500',
+    fontWeight: '600',
   },
 });

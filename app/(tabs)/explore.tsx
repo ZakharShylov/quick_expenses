@@ -1,10 +1,14 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { CATEGORY_COLORS, ExpenseCategory } from '@/src/constants/expense-categories';
 import { getCategoryTotals, getTotal } from '@/src/db/analytics';
+import { colors, radius, spacing } from '@/src/theme';
 import { DonutChart } from '@/src/ui/DonutChart';
+import { AppText } from '@/src/ui/AppText';
+import { Card } from '@/src/ui/Card';
+import { Screen } from '@/src/ui/Screen';
 import { AnalyticsPeriod, getDateRange } from '@/src/utils/dateRanges';
 
 type CategoryTotal = {
@@ -23,7 +27,7 @@ function getCategoryColor(category: string) {
     return CATEGORY_COLORS[category as ExpenseCategory];
   }
 
-  return '#9CA3AF';
+  return colors.textSecondary;
 }
 
 export default function AnalyticsScreen() {
@@ -70,32 +74,49 @@ export default function AnalyticsScreen() {
   );
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Статистика</Text>
+    <Screen scroll contentStyle={styles.container}>
+      <AppText variant="title">Статистика</AppText>
 
-      <View style={styles.segmented}>
-        {PERIOD_TABS.map((tab) => {
-          const selected = tab.key === period;
+      <Card style={styles.segmentedCard}>
+        <View style={styles.segmented}>
+          {PERIOD_TABS.map((tab) => {
+            const selected = tab.key === period;
 
-          return (
-            <Pressable
-              key={tab.key}
-              style={[styles.segment, selected && styles.segmentSelected]}
-              onPress={() => setPeriod(tab.key)}>
-              <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
-                {tab.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+            return (
+              <Pressable
+                key={tab.key}
+                style={[styles.segment, selected && styles.segmentSelected]}
+                onPress={() => setPeriod(tab.key)}>
+                <AppText
+                  variant="body"
+                  color={selected ? colors.textPrimary : colors.textSecondary}
+                  style={selected ? styles.segmentTextSelected : styles.segmentText}>
+                  {tab.label}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
+      </Card>
 
-      <DonutChart data={donutData} total={total} size={230} strokeWidth={46} />
+      <Card style={styles.chartCard}>
+        <DonutChart data={donutData} total={total} size={230} strokeWidth={46} />
+      </Card>
 
-      {isLoading && <Text style={styles.infoText}>Загрузка...</Text>}
-      {!!error && <Text style={styles.errorText}>{error}</Text>}
+      {isLoading && (
+        <AppText variant="body" color={colors.textSecondary} style={styles.infoText}>
+          Загрузка...
+        </AppText>
+      )}
+      {!!error && (
+        <AppText variant="caption" color={colors.danger} style={styles.infoText}>
+          {error}
+        </AppText>
+      )}
       {!isLoading && !error && categoryTotals.length === 0 && (
-        <Text style={styles.infoText}>Нет расходов за выбранный период</Text>
+        <AppText variant="body" color={colors.textSecondary} style={styles.infoText}>
+          Нет расходов за выбранный период
+        </AppText>
       )}
 
       <View style={styles.list}>
@@ -103,112 +124,105 @@ export default function AnalyticsScreen() {
           const percent = total > 0 ? (item.total / total) * 100 : 0;
 
           return (
-            <View key={item.category} style={styles.row}>
-              <View style={styles.rowLeft}>
-                <View style={[styles.colorDot, { backgroundColor: getCategoryColor(item.category) }]} />
-                <Text style={styles.categoryText}>{item.category}</Text>
+            <Card key={item.category} style={styles.rowCard}>
+              <View style={styles.row}>
+                <View style={styles.rowLeft}>
+                  <View style={[styles.colorDot, { backgroundColor: getCategoryColor(item.category) }]} />
+                  <AppText variant="body">{item.category}</AppText>
+                </View>
+                <View style={styles.rowRight}>
+                  <AppText variant="body" style={styles.amountText}>
+                    {item.total.toFixed(2)}
+                  </AppText>
+                  <AppText variant="caption" color={colors.textSecondary}>
+                    {percent.toFixed(1)}%
+                  </AppText>
+                </View>
               </View>
-              <View style={styles.rowRight}>
-                <Text style={styles.amountText}>{item.total.toFixed(2)}</Text>
-                <Text style={styles.percentText}>{percent.toFixed(1)}%</Text>
-              </View>
-            </View>
+            </Card>
           );
         })}
       </View>
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    paddingBottom: 32,
-    backgroundColor: '#fff',
     minHeight: '100%',
+    paddingBottom: spacing.xxxl,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
+  segmentedCard: {
+    marginTop: spacing.lg,
+    padding: spacing.xs,
   },
   segmented: {
-    marginTop: 16,
     flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    padding: 4,
-    gap: 4,
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    gap: spacing.xs,
   },
   segment: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: spacing.md,
+    borderRadius: radius.sm,
     alignItems: 'center',
   },
   segmentSelected: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
   },
   segmentText: {
-    fontSize: 14,
-    color: '#4B5563',
     fontWeight: '500',
   },
   segmentTextSelected: {
-    color: '#111827',
     fontWeight: '700',
   },
-  infoText: {
-    marginTop: 14,
-    textAlign: 'center',
-    color: '#6B7280',
+  chartCard: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.card,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  errorText: {
-    marginTop: 14,
+  infoText: {
+    marginTop: spacing.md,
     textAlign: 'center',
-    color: '#B00020',
   },
   list: {
-    marginTop: 18,
-    gap: 10,
+    marginTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  rowCard: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
   },
   rowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    paddingRight: 12,
+    paddingRight: spacing.md,
   },
   colorDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
-    marginRight: 10,
-  },
-  categoryText: {
-    color: '#111827',
-    fontSize: 15,
-    fontWeight: '500',
+    borderRadius: radius.round,
+    marginRight: spacing.sm,
   },
   rowRight: {
     alignItems: 'flex-end',
   },
   amountText: {
-    color: '#111827',
     fontWeight: '700',
-    fontSize: 15,
-  },
-  percentText: {
-    marginTop: 2,
-    color: '#6B7280',
-    fontSize: 12,
   },
 });

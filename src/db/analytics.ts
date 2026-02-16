@@ -10,6 +10,11 @@ type TotalRow = {
   total: number;
 };
 
+export type TopSpendingDayRow = {
+  date: string;
+  total: number;
+};
+
 export async function getCategoryTotals(fromISO: string, toISO: string) {
   await initDatabaseAsync();
   const db = await getDbAsync();
@@ -40,4 +45,23 @@ export async function getTotal(fromISO: string, toISO: string) {
   );
 
   return row?.total ?? 0;
+}
+
+export async function getTopSpendingDays(fromISO: string, toISO: string, limit = 10) {
+  await initDatabaseAsync();
+  const db = await getDbAsync();
+
+  const rows = await db.getAllAsync<TopSpendingDayRow>(
+    `SELECT date, COALESCE(SUM(amount), 0) as total
+     FROM transactions
+     WHERE date >= ? AND date < ?
+     GROUP BY date
+     ORDER BY total DESC
+     LIMIT ?`,
+    fromISO,
+    toISO,
+    limit
+  );
+
+  return rows;
 }

@@ -30,6 +30,30 @@ type TransactionRow = {
   createdAt: string;
 };
 
+function mapRow(row: TransactionRow) {
+  return {
+    id: row.id,
+    amount: row.amount,
+    category: row.category,
+    date: row.date,
+    createdAt: row.createdAt,
+    ...(row.item ? { itemName: row.item } : {}),
+    ...(row.note ? { note: row.note } : {}),
+  } satisfies Transaction;
+}
+
+function addOneDayISO(dateISO: string) {
+  const current = new Date(`${dateISO}T00:00:00`);
+  const next = new Date(current);
+  next.setDate(next.getDate() + 1);
+
+  const year = next.getFullYear();
+  const month = `${next.getMonth() + 1}`.padStart(2, '0');
+  const day = `${next.getDate()}`.padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
 export async function addTransaction(transaction: NewTransactionInput) {
   await initDatabaseAsync();
   const db = await getDbAsync();
@@ -59,13 +83,32 @@ export async function getAllTransactions() {
      ORDER BY createdAt DESC`
   );
 
-  return rows.map((row) => ({
-    id: row.id,
-    amount: row.amount,
-    category: row.category,
-    date: row.date,
-    createdAt: row.createdAt,
-    ...(row.item ? { itemName: row.item } : {}),
-    ...(row.note ? { note: row.note } : {}),
-  })) satisfies Transaction[];
+  return rows.map(mapRow);
+}
+
+export async function getTransactionsByDate(dateISO: string, limit = 10) {
+  await initDatabaseAsync();
+  const db = await getDbAsync();
+
+  const toISO = addOneDayISO(dateISO);
+
+  const rows = await db.getAllAsync<TransactionRow>(
+    `SELECT id, amount, category, item, note, date, createdAt
+     FROM transactions
+     WHERE date >= ? AND date < ?
+     ORDER BY createdAt DESC
+     LIMIT ?`,
+    dateISO,
+    toISO,
+    limit
+  );
+
+  return rows.map(mapRow);
+}
+
+export async function deleteTransaction(id: string) {
+  await initDatabaseAsync();
+  const db = await getDbAsync();
+
+  await db.runAsync(`DELETE FROM transactions WHERE id = ?`, id);
 }

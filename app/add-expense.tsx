@@ -1,29 +1,100 @@
-import { Stack, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  BottomSheetBackdrop,
+  BottomSheetBackdropProps,
+  BottomSheetFlatList,
+  BottomSheetModal,
+  BottomSheetTextInput,
+} from '@gorhom/bottom-sheet';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
 
-import { ExpenseCategory, EXPENSE_CATEGORIES } from '@/src/constants/expense-categories';
+import { CATEGORIES, ExpenseCategory } from '@/src/constants/categories';
 import { addTransaction } from '@/src/db/transactions';
+import { useCurrency } from '@/src/providers/CurrencyProvider';
+import { colors, radius, spacing } from '@/src/theme';
 import { toISODateOnly } from '@/src/utils/dateRanges';
+import { getCurrencySymbol } from '@/src/utils/money';
+import { AppText } from '@/src/ui/AppText';
+import { Card } from '@/src/ui/Card';
+import { Screen } from '@/src/ui/Screen';
+
+function parseDateParam(dateParam: string | string[] | undefined) {
+  const raw = Array.isArray(dateParam) ? dateParam[0] : dateParam;
+
+  if (!raw) return new Date();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return new Date(`${raw}T00:00:00`);
+  }
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
 
 export default function AddExpenseScreen() {
   const router = useRouter();
+  const { currencyCode } = useCurrency();
+  const { date } = useLocalSearchParams<{ date?: string | string[] }>();
+
+  const expenseDate = useMemo(() => parseDateParam(date), [date]);
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState<ExpenseCategory>('Продукты');
+  const [category, setCategory] = useState<ExpenseCategory>('Groceries');
   const [itemName, setItemName] = useState('');
   const [note, setNote] = useState('');
   const [amountError, setAmountError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [today] = useState(() => new Date());
+  const [categorySearch, setCategorySearch] = useState('');
+  const bottomSheetModalRef = useRef<BottomSheetModal>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const snapPoints = useMemo(() => ['60%'], []);
 
-  const displayDate = useMemo(() => today.toLocaleDateString('ru-RU'), [today]);
+  const displayDate = useMemo(() => expenseDate.toLocaleDateString('en-GB'), [expenseDate]);
+  const currencySymbol = useMemo(() => getCurrencySymbol(currencyCode), [currencyCode]);
+
+  const filteredCategories = useMemo<ExpenseCategory[]>(() => {
+    const query = categorySearch.trim().toLowerCase();
+    if (!query) return [...CATEGORIES] as ExpenseCategory[];
+    return CATEGORIES.filter((item) => item.toLowerCase().includes(query)) as ExpenseCategory[];
+  }, [categorySearch]);
+
+  const openCategorySheet = useCallback(() => {
+    bottomSheetModalRef.current?.present();
+  }, []);
+
+  const closeCategorySheet = useCallback(() => {
+    bottomSheetModalRef.current?.dismiss();
+  }, []);
+
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        opacity={0.35}
+        pressBehavior="close"
+      />
+    ),
+    []
+  );
 
   const handleSave = async () => {
     const parsedAmount = Number(amount.replace(',', '.'));
 
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      setAmountError('Сумма должна быть больше 0');
+      setAmountError('Amount must be greater than 0');
       return;
     }
 
@@ -36,180 +107,349 @@ export default function AddExpenseScreen() {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         amount: parsedAmount,
         category,
-        date: toISODateOnly(today),
+        date: toISODateOnly(expenseDate),
         ...(itemName.trim() ? { itemName: itemName.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
       });
 
+      Keyboard.dismiss();
       router.back();
     } catch {
-      setSaveError('Не удалось сохранить расход');
+      setSaveError('Failed to save expense');
     } finally {
       setIsSaving(false);
     }
   };
 
+  const handleSelectCategory = (value: ExpenseCategory) => {
+    setCategory(value);
+    setCategorySearch('');
+    closeCategorySheet();
+  };
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: 'Добавить расход' }} />
+    <Screen contentStyle={styles.screenContent}>
+      <Stack.Screen options={{ title: 'Add expense', headerBackButtonDisplayMode: 'minimal' }} />
 
-      <Text style={styles.label}>Amount *</Text>
-      <TextInput
-        style={styles.input}
-        value={amount}
-        onChangeText={(value) => {
-          setAmount(value);
-          if (amountError) {
-            setAmountError('');
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoiding}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={92}>
+          <ScrollView
+            ref={scrollViewRef}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            contentContainerStyle={styles.container}
+            showsVerticalScrollIndicator={false}>
+            <Card style={styles.amountCard}>
+              <AppText variant="caption" color={colors.textSecondary}>
+                Amount ({currencyCode})
+              </AppText>
+              <TextInput
+                style={styles.amountInput}
+                value={amount}
+                onChangeText={(value) => {
+                  setAmount(value);
+                  if (amountError) setAmountError('');
+                }}
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+                placeholder={`${currencySymbol}0.00`}
+                placeholderTextColor={colors.textSecondary}
+              />
+              {!!amountError && (
+                <AppText variant="caption" color={colors.danger} style={styles.errorText}>
+                  {amountError}
+                </AppText>
+              )}
+            </Card>
+
+            <Card style={styles.fieldCard}>
+              <View style={styles.categoryRow}>
+                <View style={styles.categoryTextBlock}>
+                  <AppText variant="caption" color={colors.textSecondary}>
+                    Category
+                  </AppText>
+                  <AppText variant="body" style={styles.categoryValue}>
+                    {category}
+                  </AppText>
+                </View>
+
+                <Pressable style={styles.chooseButton} onPress={openCategorySheet} disabled={isSaving}>
+                  <AppText variant="caption" color={colors.white} style={styles.chooseButtonText}>
+                    Select
+                  </AppText>
+                </Pressable>
+              </View>
+            </Card>
+
+            <Card style={styles.fieldCard}>
+              <AppText variant="caption" color={colors.textSecondary}>
+                Item
+              </AppText>
+              <TextInput
+                style={styles.input}
+                value={itemName}
+                onChangeText={setItemName}
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+                placeholder="For example, Milk"
+                placeholderTextColor={colors.textSecondary}
+              />
+            </Card>
+
+            <Card style={styles.fieldCard}>
+              <AppText variant="caption" color={colors.textSecondary}>
+                Note
+              </AppText>
+              <TextInput
+                style={[styles.input, styles.noteInput]}
+                value={note}
+                onChangeText={setNote}
+                placeholder="Add a note"
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                textAlignVertical="top"
+                onFocus={() => {
+                  requestAnimationFrame(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                  });
+                }}
+              />
+            </Card>
+
+            <AppText variant="caption" color={colors.textSecondary} style={styles.dateText}>
+              Date: {displayDate}
+            </AppText>
+
+            {!!saveError && (
+              <AppText variant="caption" color={colors.danger} style={styles.errorText}>
+                {saveError}
+              </AppText>
+            )}
+
+            <View style={styles.actions}>
+              <Pressable
+                style={[styles.saveButton, isSaving && styles.buttonDisabled]}
+                onPress={handleSave}
+                disabled={isSaving}>
+                <AppText variant="body" color={colors.white} style={styles.saveButtonText}>
+                  {isSaving ? 'Saving...' : 'Save'}
+                </AppText>
+              </Pressable>
+              <Pressable
+                style={[styles.cancelButton, isSaving && styles.buttonDisabled]}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  router.back();
+                }}
+                disabled={isSaving}>
+                <AppText variant="body" color={colors.textPrimary}>
+                  Cancel
+                </AppText>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
+
+      <BottomSheetModal
+        ref={bottomSheetModalRef}
+        index={0}
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        backdropComponent={renderBackdrop}
+        handleIndicatorStyle={styles.sheetHandle}
+        backgroundStyle={styles.sheetBackground}
+        onDismiss={() => setCategorySearch('')}>
+        <BottomSheetFlatList
+          data={filteredCategories}
+          keyExtractor={(item: ExpenseCategory) => item}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.categoryListContent}
+          ListHeaderComponent={
+            <View style={styles.sheetHeader}>
+              <AppText variant="subtitle" style={styles.sheetTitle}>
+                Select category
+              </AppText>
+              <BottomSheetTextInput
+                style={styles.searchInput}
+                value={categorySearch}
+                onChangeText={setCategorySearch}
+                placeholder="Search category"
+                placeholderTextColor={colors.textSecondary}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+            </View>
           }
-        }}
-        keyboardType="numeric"
-        placeholder="0"
-      />
-      {!!amountError && <Text style={styles.errorText}>{amountError}</Text>}
-
-      <Text style={styles.label}>Category</Text>
-      <View style={styles.chipsRow}>
-        {EXPENSE_CATEGORIES.map((option) => {
-          const selected = option === category;
-
-          return (
-            <Pressable
-              key={option}
-              style={[styles.chip, selected && styles.chipSelected]}
-              onPress={() => setCategory(option)}>
-              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{option}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <Text style={styles.label}>Item (optional)</Text>
-      <TextInput
-        style={styles.input}
-        value={itemName}
-        onChangeText={setItemName}
-        placeholder="Например, Молоко"
-      />
-
-      <Text style={styles.label}>Note (optional)</Text>
-      <TextInput
-        style={[styles.input, styles.noteInput]}
-        value={note}
-        onChangeText={setNote}
-        placeholder="Комментарий"
-        multiline
-      />
-
-      <Text style={styles.dateText}>Date: {displayDate}</Text>
-      {!!saveError && <Text style={styles.errorText}>{saveError}</Text>}
-
-      <View style={styles.actions}>
-        <Pressable
-          style={[styles.saveButton, isSaving && styles.buttonDisabled]}
-          onPress={handleSave}
-          disabled={isSaving}>
-          <Text style={styles.saveButtonText}>{isSaving ? 'Saving...' : 'Save'}</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.cancelButton, isSaving && styles.buttonDisabled]}
-          onPress={() => router.back()}
-          disabled={isSaving}>
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+          renderItem={({ item }: { item: ExpenseCategory }) => {
+            const selected = item === category;
+            return (
+              <Pressable
+                style={[styles.categoryOption, selected && styles.categoryOptionSelected]}
+                onPress={() => handleSelectCategory(item)}>
+                <AppText
+                  variant="body"
+                  color={selected ? colors.white : colors.textPrimary}
+                  style={selected ? styles.categoryOptionTextSelected : undefined}>
+                  {item}
+                </AppText>
+              </Pressable>
+            );
+          }}
+          ListEmptyComponent={
+            <AppText variant="body" color={colors.textSecondary} style={styles.emptySearchText}>
+              No categories found
+            </AppText>
+          }
+        />
+      </BottomSheetModal>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    backgroundColor: '#fff',
-    gap: 8,
+  screenContent: {
+    flex: 1,
   },
-  label: {
-    marginTop: 8,
-    fontSize: 15,
-    fontWeight: '600',
+  keyboardAvoiding: {
+    flex: 1,
+  },
+  container: {
+    gap: spacing.md,
+    paddingBottom: spacing.xl,
+  },
+  amountCard: {
+    marginTop: spacing.sm,
+    padding: spacing.lg,
+  },
+  amountInput: {
+    marginTop: spacing.sm,
+    fontSize: 34,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    paddingVertical: spacing.xs,
+  },
+  fieldCard: {
+    padding: spacing.lg,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  categoryTextBlock: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  categoryValue: {
+    marginTop: spacing.xs,
+    fontWeight: '700',
+  },
+  chooseButton: {
+    backgroundColor: colors.fab,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  chooseButtonText: {
+    fontWeight: '700',
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    marginTop: spacing.sm,
     fontSize: 16,
-    backgroundColor: '#fff',
+    color: colors.textPrimary,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   noteInput: {
-    minHeight: 90,
+    minHeight: 56,
     textAlignVertical: 'top',
   },
-  errorText: {
-    color: '#b00020',
-    marginTop: 2,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
-  },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#bbb',
-    backgroundColor: '#fff',
-  },
-  chipSelected: {
-    borderColor: '#111',
-    backgroundColor: '#111',
-  },
-  chipText: {
-    color: '#222',
-  },
-  chipTextSelected: {
-    color: '#fff',
-  },
   dateText: {
-    marginTop: 10,
-    fontSize: 15,
-    color: '#444',
+    marginTop: 0,
   },
   actions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 0,
+    gap: spacing.sm,
   },
   saveButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#111',
+    backgroundColor: colors.fab,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
   },
   saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   cancelButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#999',
-    backgroundColor: '#fff',
-  },
-  cancelButtonText: {
-    color: '#222',
-    fontSize: 16,
-    fontWeight: '600',
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
   },
   buttonDisabled: {
     opacity: 0.7,
+  },
+  errorText: {
+    marginTop: spacing.xs,
+  },
+  sheetBackground: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+  },
+  sheetHandle: {
+    backgroundColor: colors.border,
+    width: 44,
+    height: 5,
+    borderRadius: radius.round,
+  },
+  sheetHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  sheetTitle: {
+    marginBottom: spacing.md,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    color: colors.textPrimary,
+    fontSize: 16,
+  },
+  categoryListContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  categoryOption: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.card,
+  },
+  categoryOptionSelected: {
+    backgroundColor: colors.fab,
+    borderColor: colors.fab,
+  },
+  categoryOptionTextSelected: {
+    fontWeight: '700',
+  },
+  emptySearchText: {
+    textAlign: 'center',
+    marginTop: spacing.lg,
   },
 });

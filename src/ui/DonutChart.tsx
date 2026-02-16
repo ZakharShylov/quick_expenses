@@ -11,6 +11,7 @@ import Animated, {
 import Svg, { G, Path } from 'react-native-svg';
 
 import { colors, spacing, typography } from '@/src/theme';
+import { CurrencyCode, formatMoney } from '@/src/utils/money';
 
 type DonutDataItem = {
   label: string;
@@ -21,6 +22,7 @@ type DonutDataItem = {
 type DonutChartProps = {
   data: DonutDataItem[];
   total: number;
+  currencyCode?: CurrencyCode;
   size?: number;
   strokeWidth?: number;
 };
@@ -73,7 +75,13 @@ function interpolateData(fromData: DonutDataItem[], toData: DonutDataItem[], pro
     .filter((item) => item.value > 0.001);
 }
 
-function DonutChartBase({ data, total, size = 220, strokeWidth = 42 }: DonutChartProps) {
+function DonutChartBase({
+  data,
+  total,
+  currencyCode = 'EUR',
+  size = 220,
+  strokeWidth = 42,
+}: DonutChartProps) {
   const radius = size / 2;
   const innerRadius = Math.max(radius - strokeWidth, 0);
 
@@ -167,13 +175,8 @@ function DonutChartBase({ data, total, size = 220, strokeWidth = 42 }: DonutChar
       </Svg>
 
       <View pointerEvents="none" style={styles.centerContent}>
-        <Text style={styles.centerLabel}>Итого</Text>
-        <Text style={styles.centerTotal}>
-          {displayTotal.toLocaleString('ru-RU', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
-        </Text>
+        <Text style={styles.centerLabel}>Total</Text>
+        <Text style={styles.centerTotal}>{formatMoney(displayTotal, currencyCode)}</Text>
       </View>
     </View>
   );

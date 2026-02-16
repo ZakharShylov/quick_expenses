@@ -1,4 +1,4 @@
-export type AnalyticsPeriod = 'day' | 'week' | 'month';
+export type AnalyticsPeriod = 'day' | 'week' | 'month' | 'range';
 
 type DateRange = {
   fromISO: string;
@@ -9,7 +9,7 @@ function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function addDays(date: Date, days: number) {
+export function addDays(date: Date, days: number) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
@@ -23,32 +23,61 @@ function formatISODate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function getStartOfWeekMonday(date: Date) {
+export function getStartOfWeekMonday(date: Date) {
   const currentDay = date.getDay();
   const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
   return startOfDay(addDays(date, diffToMonday));
+}
+
+export function toISODateOnly(date: Date) {
+  return formatISODate(date);
+}
+
+export function getDayRange(date: Date): DateRange {
+  const from = startOfDay(date);
+  const to = addDays(from, 1);
+
+  return { fromISO: formatISODate(from), toISO: formatISODate(to) };
+}
+
+export function getWeekRange(weekStartDate: Date): DateRange {
+  const from = getStartOfWeekMonday(weekStartDate);
+  const to = addDays(from, 7);
+
+  return { fromISO: formatISODate(from), toISO: formatISODate(to) };
+}
+
+export function getMonthRange(monthDate: Date): DateRange {
+  const from = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const to = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1);
+
+  return { fromISO: formatISODate(from), toISO: formatISODate(to) };
+}
+
+export function getRangeRange(rangeStart: Date, rangeEnd: Date): DateRange {
+  const start = startOfDay(rangeStart);
+  const end = startOfDay(rangeEnd);
+  const from = start <= end ? start : end;
+  const toInclusive = start <= end ? end : start;
+  const toExclusive = addDays(toInclusive, 1);
+
+  return { fromISO: formatISODate(from), toISO: formatISODate(toExclusive) };
 }
 
 export function getDateRange(period: AnalyticsPeriod): DateRange {
   const now = new Date();
 
   if (period === 'day') {
-    const from = startOfDay(now);
-    const to = addDays(from, 1);
-    return { fromISO: formatISODate(from), toISO: formatISODate(to) };
+    return getDayRange(now);
   }
 
   if (period === 'week') {
-    const from = getStartOfWeekMonday(now);
-    const to = addDays(from, 7);
-    return { fromISO: formatISODate(from), toISO: formatISODate(to) };
+    return getWeekRange(now);
   }
 
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return { fromISO: formatISODate(from), toISO: formatISODate(to) };
-}
+  if (period === 'month') {
+    return getMonthRange(now);
+  }
 
-export function toISODateOnly(date: Date) {
-  return formatISODate(date);
+  return getDayRange(now);
 }

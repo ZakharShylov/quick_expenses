@@ -17,6 +17,11 @@ export async function initDatabaseAsync() {
           date TEXT NOT NULL,
           createdAt TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS settings (
+          key TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL
+        );
       `);
     })();
   }

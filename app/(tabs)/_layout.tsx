@@ -1,8 +1,14 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -18,8 +24,73 @@ const TAB_ITEMS: Record<string, { label: string; icon: TabIconName }> = {
   settings: { label: 'Settings', icon: 'gearshape.fill' },
 };
 
-const ACTIVE_COLOR = '#7DD3FC';
-const INACTIVE_COLOR = 'rgba(226, 232, 240, 0.82)';
+const ACTIVE_COLOR = '#FFFFFF';
+const INACTIVE_COLOR = '#9CA3AF';
+
+type TabBarItemProps = {
+  isFocused: boolean;
+  label: string;
+  icon: TabIconName;
+  accessibilityLabel?: string;
+  testID?: string;
+  onPress: () => void;
+  onLongPress: () => void;
+};
+
+function TabBarItem({
+  isFocused,
+  label,
+  icon,
+  accessibilityLabel,
+  testID,
+  onPress,
+  onLongPress,
+}: TabBarItemProps) {
+  const focusProgress = useSharedValue(isFocused ? 1 : 0);
+
+  useEffect(() => {
+    focusProgress.value = withTiming(isFocused ? 1 : 0, {
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [focusProgress, isFocused]);
+
+  const itemAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: (1 - focusProgress.value) * 3 }],
+  }));
+
+  const iconAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: (1 - focusProgress.value) * 2 }],
+  }));
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={isFocused ? { selected: true } : {}}
+      accessibilityLabel={accessibilityLabel}
+      testID={testID}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={styles.tabButton}>
+      <Animated.View style={[styles.tabInner, itemAnimatedStyle]}>
+        <Animated.View style={iconAnimatedStyle}>
+          <IconSymbol
+            name={icon}
+            size={isFocused ? 22 : 20}
+            color={isFocused ? ACTIVE_COLOR : INACTIVE_COLOR}
+            weight={isFocused ? 'semibold' : 'regular'}
+          />
+        </Animated.View>
+        <AppText
+          variant="caption"
+          color={isFocused ? ACTIVE_COLOR : INACTIVE_COLOR}
+          style={isFocused ? styles.tabLabelActive : styles.tabLabel}>
+          {label}
+        </AppText>
+      </Animated.View>
+    </Pressable>
+  );
+}
 
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -49,28 +120,16 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             };
 
             return (
-              <Pressable
+              <TabBarItem
                 key={route.key}
-                accessibilityRole="button"
-                accessibilityState={isFocused ? { selected: true } : {}}
+                isFocused={isFocused}
+                label={item.label}
+                icon={item.icon}
                 accessibilityLabel={options.tabBarAccessibilityLabel}
                 testID={options.tabBarButtonTestID}
                 onPress={onPress}
                 onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
-                style={[styles.tabButton, isFocused && styles.tabButtonActive]}>
-                <IconSymbol
-                  name={item.icon}
-                  size={isFocused ? 22 : 20}
-                  color={isFocused ? ACTIVE_COLOR : INACTIVE_COLOR}
-                  weight={isFocused ? 'semibold' : 'regular'}
-                />
-                <AppText
-                  variant="caption"
-                  color={isFocused ? ACTIVE_COLOR : INACTIVE_COLOR}
-                  style={isFocused ? styles.tabLabelActive : styles.tabLabel}>
-                  {item.label}
-                </AppText>
-              </Pressable>
+              />
             );
           })}
         </View>
@@ -93,6 +152,19 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarHideOnKeyboard: true,
+        animation: 'fade',
+        transitionSpec: {
+          animation: 'timing',
+          config: {
+            duration: 240,
+          },
+        },
+        tabBarBackground: () => null,
+        tabBarStyle: {
+          backgroundColor: '#000000',
+          borderTopWidth: 0,
+          elevation: 0,
+        },
       }}
       tabBar={(props) => <FloatingTabBar {...props} />}>
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
@@ -107,7 +179,6 @@ const styles = StyleSheet.create({
   tabBarShell: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    backgroundColor: 'transparent',
   },
   tabBarRow: {
     flexDirection: 'row',
@@ -120,14 +191,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderRadius: radius.round,
-    backgroundColor: 'rgba(15, 23, 42, 0.86)',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 14,
   },
   tabButton: {
     flex: 1,
@@ -135,10 +200,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: spacing.xs,
     borderRadius: radius.lg,
-    gap: 2,
   },
-  tabButtonActive: {
-    backgroundColor: 'rgba(125, 211, 252, 0.14)',
+  tabInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
   },
   tabLabel: {
     fontSize: 11,
@@ -153,14 +219,14 @@ const styles = StyleSheet.create({
     width: 62,
     height: 62,
     borderRadius: radius.round,
-    backgroundColor: colors.fab,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xs,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 14,
-    elevation: 15,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 18,
+    elevation: 18,
   },
 });

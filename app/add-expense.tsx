@@ -4,6 +4,7 @@ import {
   BottomSheetFlatList,
   BottomSheetModal,
   BottomSheetTextInput,
+  useBottomSheetTimingConfigs,
 } from '@gorhom/bottom-sheet';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -21,6 +22,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import { Easing } from 'react-native-reanimated';
 
 import { CATEGORIES, ExpenseCategory } from '@/src/constants/categories';
 import { addTransaction } from '@/src/db/transactions';
@@ -64,6 +66,10 @@ export default function AddExpenseScreen() {
   const bottomSheetModalRef = useRef<BottomSheetModal>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const snapPoints = useMemo(() => ['60%'], []);
+  const bottomSheetAnimationConfigs = useBottomSheetTimingConfigs({
+    duration: 240,
+    easing: Easing.out(Easing.cubic),
+  });
 
   const displayDate = useMemo(() => expenseDate.toLocaleDateString('en-GB'), [expenseDate]);
   const currencySymbol = useMemo(() => getCurrencySymbol(currencyCode), [currencyCode]);
@@ -372,7 +378,9 @@ export default function AddExpenseScreen() {
         ref={bottomSheetModalRef}
         index={0}
         snapPoints={snapPoints}
+        animateOnMount
         enablePanDownToClose
+        animationConfigs={bottomSheetAnimationConfigs}
         backdropComponent={renderBackdrop}
         handleIndicatorStyle={styles.sheetHandle}
         backgroundStyle={styles.sheetBackground}

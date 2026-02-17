@@ -174,12 +174,12 @@ function TransactionRowCard({
 
         {expanded ? (
           <Animated.View
-            layout={LinearTransition.duration(240)}
-            entering={FadeIn.duration(180).withInitialValues({
+            layout={LinearTransition.springify().damping(18).stiffness(180)}
+            entering={FadeIn.duration(220).withInitialValues({
               opacity: 0,
-              transform: [{ translateY: -4 }],
+              transform: [{ translateY: -6 }],
             })}
-            exiting={FadeOut.duration(140)}
+            exiting={FadeOut.duration(180)}
             style={styles.expandedBlock}>
             {item.note ? (
               <View style={styles.noteBlock}>
@@ -192,7 +192,12 @@ function TransactionRowCard({
               </View>
             ) : null}
             {item.attachmentUri ? (
-              <View style={styles.attachmentBlock}>
+              <Animated.View
+                entering={FadeIn.duration(220).withInitialValues({
+                  opacity: 0,
+                  transform: [{ translateY: 4 }],
+                })}
+                style={styles.attachmentBlock}>
                 <AppText variant="caption" color={colors.textSecondary} style={styles.attachmentLabel}>
                   Attachment
                 </AppText>
@@ -201,7 +206,7 @@ function TransactionRowCard({
                   onPress={() => onAttachmentPress(item.attachmentUri!)}>
                   <Image source={{ uri: item.attachmentUri! }} style={styles.attachmentThumb} contentFit="cover" />
                 </Pressable>
-              </View>
+              </Animated.View>
             ) : null}
             <AppText variant="caption" color={colors.textSecondary} style={styles.dateLine}>
               Date: {formatTransactionDate(item.date)}

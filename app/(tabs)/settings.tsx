@@ -17,7 +17,7 @@ export default function SettingsScreen() {
   const chevronRotation = useSharedValue(0);
 
   useEffect(() => {
-    chevronRotation.value = withTiming(isCurrencyModalVisible ? 180 : 0, {
+    chevronRotation.value = withTiming(isCurrencyModalVisible ? 90 : 0, {
       duration: 200,
       easing: Easing.out(Easing.cubic),
     });
@@ -59,7 +59,7 @@ export default function SettingsScreen() {
               {currencyCode}
             </AppText>
             <Animated.View style={[styles.settingChevronWrap, chevronAnimatedStyle]}>
-              <MaterialIcons name="expand-more" size={20} color={colors.textSecondary} />
+              <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
             </Animated.View>
           </View>
         </Pressable>

@@ -11,6 +11,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,6 +19,8 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 
 import { CATEGORIES, ExpenseCategory } from '@/src/constants/categories';
 import { addTransaction } from '@/src/db/transactions';
@@ -52,9 +55,11 @@ export default function AddExpenseScreen() {
   const [category, setCategory] = useState<ExpenseCategory>('Groceries');
   const [itemName, setItemName] = useState('');
   const [note, setNote] = useState('');
+  const [attachmentUri, setAttachmentUri] = useState<string | null>(null);
   const [amountError, setAmountError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isPickingAttachment, setIsPickingAttachment] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
   const bottomSheetModalRef = useRef<BottomSheetModal>(null);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -90,6 +95,74 @@ export default function AddExpenseScreen() {
     []
   );
 
+  const pickImageFromLibrary = useCallback(async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert(
+        'Photos permission needed',
+        'Allow photo library access to attach a receipt.'
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      setAttachmentUri(result.assets[0].uri);
+    }
+  }, []);
+
+  const pickImageFromCamera = useCallback(async () => {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Camera permission needed', 'Allow camera access to capture a receipt.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      setAttachmentUri(result.assets[0].uri);
+    }
+  }, []);
+
+  const runAttachmentPicker = useCallback(
+    async (source: 'library' | 'camera') => {
+      if (isSaving || isPickingAttachment) return;
+
+      try {
+        setIsPickingAttachment(true);
+        if (source === 'camera') {
+          await pickImageFromCamera();
+          return;
+        }
+
+        await pickImageFromLibrary();
+      } finally {
+        setIsPickingAttachment(false);
+      }
+    },
+    [isPickingAttachment, isSaving, pickImageFromCamera, pickImageFromLibrary]
+  );
+
+  const openAttachmentPicker = useCallback(() => {
+    if (isSaving || isPickingAttachment) return;
+
+    Alert.alert('Attach photo', 'Choose image source', [
+      { text: 'Camera', onPress: () => void runAttachmentPicker('camera') },
+      { text: 'Photo Library', onPress: () => void runAttachmentPicker('library') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [isPickingAttachment, isSaving, runAttachmentPicker]);
+
   const handleSave = async () => {
     const parsedAmount = Number(amount.replace(',', '.'));
 
@@ -110,6 +183,7 @@ export default function AddExpenseScreen() {
         date: toISODateOnly(expenseDate),
         ...(itemName.trim() ? { itemName: itemName.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
+        ...(attachmentUri ? { attachmentUri } : {}),
       });
 
       Keyboard.dismiss();
@@ -218,6 +292,45 @@ export default function AddExpenseScreen() {
                   });
                 }}
               />
+            </Card>
+
+            <Card style={styles.fieldCard}>
+              <AppText variant="caption" color={colors.textSecondary}>
+                Receipt
+              </AppText>
+              <View style={styles.attachmentActions}>
+                <Pressable
+                  style={styles.attachButton}
+                  onPress={openAttachmentPicker}
+                  disabled={isSaving || isPickingAttachment}>
+                  <AppText variant="caption" color={colors.white} style={styles.attachButtonText}>
+                    {isPickingAttachment
+                      ? 'Opening...'
+                      : attachmentUri
+                        ? 'Change photo'
+                        : 'Add receipt'}
+                  </AppText>
+                </Pressable>
+                {attachmentUri ? (
+                  <Pressable
+                    style={styles.removeButton}
+                    onPress={() => setAttachmentUri(null)}
+                    disabled={isSaving || isPickingAttachment}>
+                    <AppText variant="caption" color={colors.textPrimary} style={styles.removeButtonText}>
+                      Remove
+                    </AppText>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {attachmentUri ? (
+                <Pressable
+                  style={styles.attachmentPreviewWrap}
+                  onPress={openAttachmentPicker}
+                  disabled={isSaving || isPickingAttachment}>
+                  <Image source={{ uri: attachmentUri }} style={styles.attachmentPreview} contentFit="cover" />
+                </Pressable>
+              ) : null}
             </Card>
 
             <AppText variant="caption" color={colors.textSecondary} style={styles.dateText}>
@@ -369,6 +482,46 @@ const styles = StyleSheet.create({
   noteInput: {
     minHeight: 56,
     textAlignVertical: 'top',
+  },
+  attachmentActions: {
+    marginTop: spacing.sm,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  attachButton: {
+    backgroundColor: colors.fab,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  attachButtonText: {
+    fontWeight: '700',
+  },
+  removeButton: {
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  removeButtonText: {
+    fontWeight: '700',
+  },
+  attachmentPreviewWrap: {
+    marginTop: spacing.md,
+    width: 96,
+    height: 96,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  attachmentPreview: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.border,
   },
   dateText: {
     marginTop: 0,

@@ -1,7 +1,17 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Alert, Modal, PanResponder, Pressable, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
+import {
+  Alert,
+  FlatList,
+  ListRenderItemInfo,
+  Modal,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import Animated, {
   Easing,
@@ -17,13 +27,13 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { getCategoryLabel } from '@/src/constants/categories';
 import { getTotal } from '@/src/db/analytics';
 import { deleteTransaction, getTransactionsByDate, Transaction } from '@/src/db/transactions';
 import { useCurrency } from '@/src/providers/CurrencyProvider';
 import { colors, radius, spacing } from '@/src/theme';
 import { toISODateOnly } from '@/src/utils/dateRanges';
 import { type CurrencyCode, formatMoney } from '@/src/utils/money';
+import { formatTitle } from '@/src/utils/transactionTitle';
 import { AppText } from '@/src/ui/AppText';
 import { Card } from '@/src/ui/Card';
 import { Screen } from '@/src/ui/Screen';
@@ -71,6 +81,7 @@ type TransactionRowCardProps = {
   currencyCode: CurrencyCode;
   onPress: () => void;
   onLongPress: () => void;
+  onAttachmentPress: (uri: string) => void;
 };
 
 function TransactionRowCard({
@@ -79,6 +90,7 @@ function TransactionRowCard({
   currencyCode,
   onPress,
   onLongPress,
+  onAttachmentPress,
 }: TransactionRowCardProps) {
   const pressScale = useSharedValue(1);
   const pressHighlight = useSharedValue(0);
@@ -146,9 +158,7 @@ function TransactionRowCard({
           delayLongPress={280}>
           <View style={styles.row}>
             <AppText variant="body" style={styles.rowLeftText}>
-              {item.itemName
-                ? `${getCategoryLabel(item.category)} - ${item.itemName}`
-                : getCategoryLabel(item.category)}
+              {formatTitle(item.category, item.itemName)}
             </AppText>
 
             <View style={styles.rowRight}>
@@ -181,6 +191,18 @@ function TransactionRowCard({
                 </AppText>
               </View>
             ) : null}
+            {item.attachmentUri ? (
+              <View style={styles.attachmentBlock}>
+                <AppText variant="caption" color={colors.textSecondary} style={styles.attachmentLabel}>
+                  Attachment
+                </AppText>
+                <Pressable
+                  style={styles.attachmentThumbWrap}
+                  onPress={() => onAttachmentPress(item.attachmentUri!)}>
+                  <Image source={{ uri: item.attachmentUri! }} style={styles.attachmentThumb} contentFit="cover" />
+                </Pressable>
+              </View>
+            ) : null}
             <AppText variant="caption" color={colors.textSecondary} style={styles.dateLine}>
               Date: {formatTransactionDate(item.date)}
             </AppText>
@@ -192,13 +214,13 @@ function TransactionRowCard({
 }
 
 export default function HomeScreen() {
-  const router = useRouter();
   const { currencyCode } = useCurrency();
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [todayTransactions, setTodayTransactions] = useState<Transaction[]>([]);
   const [totalToday, setTotalToday] = useState(0);
   const [loadError, setLoadError] = useState('');
   const [isCalendarVisible, setCalendarVisible] = useState(false);
+  const [fullscreenAttachmentUri, setFullscreenAttachmentUri] = useState<string | null>(null);
   const [expandedTransactionId, setExpandedTransactionId] = useState<string | null>(null);
   const [dateShiftDirection, setDateShiftDirection] = useState<'next' | 'prev' | 'neutral'>(
     'neutral'
@@ -379,81 +401,84 @@ export default function HomeScreen() {
     return FadeIn.duration(220);
   }, [dateShiftDirection]);
 
+  const renderTransactionItem = useCallback(
+    ({ item, index }: ListRenderItemInfo<Transaction>) => (
+      <Animated.View
+        layout={LinearTransition.duration(260)}
+        entering={FadeInUp.duration(220)
+          .delay(Math.min(index * 35, 180))
+          .withInitialValues({
+            opacity: 0,
+            transform: [{ translateY: 8 }],
+          })}
+        exiting={FadeOut.duration(150)}>
+        <TransactionRowCard
+          item={item}
+          expanded={expandedTransactionId === item.id}
+          currencyCode={currencyCode}
+          onPress={() => handleTransactionPress(item.id)}
+          onLongPress={() => handleTransactionLongPress(item)}
+          onAttachmentPress={(uri) => setFullscreenAttachmentUri(uri)}
+        />
+      </Animated.View>
+    ),
+    [currencyCode, expandedTransactionId, handleTransactionLongPress, handleTransactionPress]
+  );
+
+  const listHeader = (
+    <View style={styles.listHeader}>
+      <View style={styles.header}>
+        <Animated.View key={selectedDateISO} entering={dateEntering} style={styles.dateWrapper}>
+          <AppText variant="title">{formattedDate}</AppText>
+        </Animated.View>
+
+        <Pressable
+          style={styles.headerArrowButton}
+          onPress={() => setCalendarVisible(true)}
+          hitSlop={8}>
+          <AppText variant="title" color={colors.textSecondary} style={styles.headerArrow}>
+            {'>'}
+          </AppText>
+        </Pressable>
+      </View>
+
+      <View style={styles.divider} />
+
+      <Card style={styles.todayCard}>
+        <AppText variant="subtitle" color={colors.textSecondary}>
+          Spent today
+        </AppText>
+        <AppText style={styles.todayTotal}>{formatMoney(totalToday, currencyCode)}</AppText>
+      </Card>
+
+      {!!loadError && (
+        <AppText variant="caption" color={colors.danger} style={styles.errorText}>
+          {loadError}
+        </AppText>
+      )}
+    </View>
+  );
+
   return (
     <Screen contentStyle={styles.content}>
       <View style={styles.gestureArea} {...panResponder.panHandlers}>
-        <View style={styles.header}>
-          <Animated.View key={selectedDateISO} entering={dateEntering} style={styles.dateWrapper}>
-            <AppText variant="title">{formattedDate}</AppText>
-          </Animated.View>
-
-          <Pressable
-            style={styles.headerArrowButton}
-            onPress={() => setCalendarVisible(true)}
-            hitSlop={8}>
-            <AppText variant="title" color={colors.textSecondary} style={styles.headerArrow}>
-              ›
-            </AppText>
-          </Pressable>
-        </View>
-
-        <View style={styles.divider} />
-
-        <Animated.View style={animatedContentStyle}>
-          <Card style={styles.todayCard}>
-            <AppText variant="subtitle" color={colors.textSecondary}>
-              Spent today
-            </AppText>
-            <AppText style={styles.todayTotal}>{formatMoney(totalToday, currencyCode)}</AppText>
-          </Card>
-
-          {!!loadError && (
-            <AppText variant="caption" color={colors.danger} style={styles.errorText}>
-              {loadError}
-            </AppText>
-          )}
-
-          {todayTransactions.length === 0 ? (
-            <AppText variant="body" color={colors.textSecondary} style={styles.emptyText}>
-              No expenses yet
-            </AppText>
-          ) : (
-            <View style={styles.list}>
-              {todayTransactions.map((item, index) => (
-                <Animated.View
-                  key={item.id}
-                  layout={LinearTransition.duration(260)}
-                  entering={FadeInUp.duration(220)
-                    .delay(Math.min(index * 35, 180))
-                    .withInitialValues({
-                      opacity: 0,
-                      transform: [{ translateY: 8 }],
-                    })}
-                  exiting={FadeOut.duration(150)}>
-                  <TransactionRowCard
-                    item={item}
-                    expanded={expandedTransactionId === item.id}
-                    currencyCode={currencyCode}
-                    onPress={() => handleTransactionPress(item.id)}
-                    onLongPress={() => handleTransactionLongPress(item)}
-                  />
-                </Animated.View>
-              ))}
-            </View>
-          )}
+        <Animated.View style={[styles.listWrap, animatedContentStyle]}>
+          <FlatList
+            data={todayTransactions}
+            renderItem={renderTransactionItem}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={listHeader}
+            stickyHeaderIndices={[0]}
+            ListEmptyComponent={
+              <AppText variant="body" color={colors.textSecondary} style={styles.emptyText}>
+                No expenses yet
+              </AppText>
+            }
+            contentContainerStyle={styles.listContent}
+          />
         </Animated.View>
       </View>
-
-      <Pressable
-        style={styles.fab}
-        onPress={() =>
-          router.push({
-            pathname: '/add-expense',
-            params: { date: selectedDateISO },
-          })
-        }>
-        <AppText style={styles.fabText}>+</AppText>
-      </Pressable>
 
       <Modal
         visible={isCalendarVisible}
@@ -488,6 +513,28 @@ export default function HomeScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <Modal
+        visible={!!fullscreenAttachmentUri}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFullscreenAttachmentUri(null)}>
+        <View style={styles.fullscreenModal}>
+          <Pressable style={styles.fullscreenBackdrop} onPress={() => setFullscreenAttachmentUri(null)} />
+          {fullscreenAttachmentUri ? (
+            <Image
+              source={{ uri: fullscreenAttachmentUri }}
+              style={styles.fullscreenImage}
+              contentFit="contain"
+            />
+          ) : null}
+          <Pressable
+            style={styles.fullscreenCloseButton}
+            onPress={() => setFullscreenAttachmentUri(null)}>
+            <MaterialIcons name="close" size={24} color={colors.white} />
+          </Pressable>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -495,10 +542,18 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   content: {
     position: 'relative',
-    paddingBottom: spacing.xxxl + spacing.xxl,
+    paddingBottom: 0,
   },
   gestureArea: {
     flex: 1,
+  },
+  listWrap: {
+    flex: 1,
+  },
+  listHeader: {
+    backgroundColor: colors.background,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
   },
   header: {
     flexDirection: 'row',
@@ -536,10 +591,10 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     marginTop: spacing.md,
+    textAlign: 'center',
   },
-  list: {
-    marginTop: spacing.md,
-    gap: spacing.sm,
+  listContent: {
+    paddingBottom: 140,
   },
   rowCard: {
     paddingVertical: spacing.sm,
@@ -547,6 +602,7 @@ const styles = StyleSheet.create({
   },
   rowCardWrapper: {
     borderRadius: radius.lg,
+    marginTop: spacing.sm,
   },
   rowPressable: {
     borderRadius: radius.md,
@@ -583,34 +639,31 @@ const styles = StyleSheet.create({
   noteBlock: {
     marginBottom: spacing.xs,
   },
+  attachmentBlock: {
+    marginBottom: spacing.sm,
+  },
+  attachmentLabel: {
+    marginBottom: spacing.xs,
+  },
+  attachmentThumbWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  attachmentThumb: {
+    width: '100%',
+    height: '100%',
+  },
   noteText: {
     marginTop: spacing.xs,
     lineHeight: 18,
   },
   dateLine: {
     marginTop: spacing.xs,
-  },
-  fab: {
-    position: 'absolute',
-    right: spacing.xl,
-    bottom: spacing.xl,
-    width: 56,
-    height: 56,
-    borderRadius: radius.round,
-    backgroundColor: colors.fab,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  fabText: {
-    color: colors.white,
-    fontSize: 30,
-    lineHeight: 30,
-    fontWeight: '600',
   },
   modalBackdrop: {
     flex: 1,
@@ -625,4 +678,30 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.md,
   },
+  fullscreenModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  fullscreenBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  fullscreenImage: {
+    width: '100%',
+    height: '78%',
+  },
+  fullscreenCloseButton: {
+    position: 'absolute',
+    top: spacing.xxl + spacing.sm,
+    right: spacing.lg,
+    width: 38,
+    height: 38,
+    borderRadius: radius.round,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
+

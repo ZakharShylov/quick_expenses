@@ -2,6 +2,20 @@ import { getDbAsync } from './db';
 
 let initPromise: Promise<void> | null = null;
 
+type TableColumnInfo = {
+  name: string;
+};
+
+async function ensureAttachmentUriColumn() {
+  const db = await getDbAsync();
+  const columns = await db.getAllAsync<TableColumnInfo>(`PRAGMA table_info(transactions);`);
+  const hasAttachmentColumn = columns.some((column) => column.name === 'attachmentUri');
+
+  if (!hasAttachmentColumn) {
+    await db.execAsync(`ALTER TABLE transactions ADD COLUMN attachmentUri TEXT;`);
+  }
+}
+
 export async function initDatabaseAsync() {
   if (!initPromise) {
     initPromise = (async () => {
@@ -14,6 +28,7 @@ export async function initDatabaseAsync() {
           category TEXT NOT NULL,
           item TEXT,
           note TEXT,
+          attachmentUri TEXT,
           date TEXT NOT NULL,
           createdAt TEXT NOT NULL
         );
@@ -23,6 +38,8 @@ export async function initDatabaseAsync() {
           value TEXT NOT NULL
         );
       `);
+
+      await ensureAttachmentUriColumn();
     })();
   }
 

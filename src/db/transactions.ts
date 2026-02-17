@@ -7,6 +7,7 @@ export type Transaction = {
   category: string;
   itemName?: string;
   note?: string;
+  attachmentUri?: string;
   date: string;
   createdAt: string;
 };
@@ -17,6 +18,7 @@ export type NewTransactionInput = {
   category: string;
   itemName?: string;
   note?: string;
+  attachmentUri?: string;
   date: string;
 };
 
@@ -26,6 +28,7 @@ type TransactionRow = {
   category: string;
   item: string | null;
   note: string | null;
+  attachmentUri: string | null;
   date: string;
   createdAt: string;
 };
@@ -39,6 +42,7 @@ function mapRow(row: TransactionRow) {
     createdAt: row.createdAt,
     ...(row.item ? { itemName: row.item } : {}),
     ...(row.note ? { note: row.note } : {}),
+    ...(row.attachmentUri ? { attachmentUri: row.attachmentUri } : {}),
   } satisfies Transaction;
 }
 
@@ -61,13 +65,14 @@ export async function addTransaction(transaction: NewTransactionInput) {
   const createdAt = new Date().toISOString();
 
   await db.runAsync(
-    `INSERT INTO transactions (id, amount, category, item, note, date, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO transactions (id, amount, category, item, note, attachmentUri, date, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     transaction.id,
     transaction.amount,
     transaction.category,
     transaction.itemName ?? null,
     transaction.note ?? null,
+    transaction.attachmentUri ?? null,
     transaction.date,
     createdAt
   );
@@ -78,7 +83,7 @@ export async function getAllTransactions() {
   const db = await getDbAsync();
 
   const rows = await db.getAllAsync<TransactionRow>(
-    `SELECT id, amount, category, item, note, date, createdAt
+    `SELECT id, amount, category, item, note, attachmentUri, date, createdAt
      FROM transactions
      ORDER BY createdAt DESC`
   );
@@ -93,7 +98,7 @@ export async function getTransactionsByDate(dateISO: string, limit = 10) {
   const toISO = addOneDayISO(dateISO);
 
   const rows = await db.getAllAsync<TransactionRow>(
-    `SELECT id, amount, category, item, note, date, createdAt
+    `SELECT id, amount, category, item, note, attachmentUri, date, createdAt
      FROM transactions
      WHERE date >= ? AND date < ?
      ORDER BY createdAt DESC

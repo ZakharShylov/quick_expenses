@@ -50,7 +50,11 @@ function parseDateParam(dateParam: string | string[] | undefined) {
 export default function AddExpenseScreen() {
   const router = useRouter();
   const { currencyCode } = useCurrency();
-  const { date } = useLocalSearchParams<{ date?: string | string[] }>();
+  const { date, returnTo } = useLocalSearchParams<{
+    date?: string | string[];
+    returnTo?: string | string[];
+    sourceTab?: string | string[];
+  }>();
 
   const expenseDate = useMemo(() => parseDateParam(date), [date]);
   const [amount, setAmount] = useState('');
@@ -193,7 +197,12 @@ export default function AddExpenseScreen() {
       });
 
       Keyboard.dismiss();
-      router.back();
+      const returnDestination = Array.isArray(returnTo) ? returnTo[0] : returnTo;
+      if (returnDestination === 'home') {
+        router.replace('/(tabs)');
+      } else {
+        router.back();
+      }
     } catch {
       setSaveError('Failed to save expense');
     } finally {

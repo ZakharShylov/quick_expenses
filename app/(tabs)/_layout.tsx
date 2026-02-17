@@ -71,7 +71,7 @@ function TabBarItem({
       testID={testID}
       onPress={onPress}
       onLongPress={onLongPress}
-      style={styles.tabButton}>
+      style={[styles.tabButton, isFocused && styles.tabButtonActive]}>
       <Animated.View style={[styles.tabInner, itemAnimatedStyle]}>
         <Animated.View style={iconAnimatedStyle}>
           <IconSymbol
@@ -95,9 +95,10 @@ function TabBarItem({
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const activeRouteName = state.routes[state.index]?.name;
 
   return (
-    <View style={[styles.tabBarShell, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
+    <View style={[styles.tabBarShell, { paddingBottom: Math.max(insets.bottom, spacing.sm) + 4 }]}>
       <View style={styles.tabBarRow}>
         <View style={styles.pill}>
           {state.routes.map((route, index) => {
@@ -138,7 +139,15 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           accessibilityRole="button"
           accessibilityLabel="Add expense"
           style={styles.fab}
-          onPress={() => router.push('/add-expense')}>
+          onPress={() =>
+            router.push({
+              pathname: '/add-expense',
+              params: {
+                returnTo: 'home',
+                ...(activeRouteName ? { sourceTab: activeRouteName } : {}),
+              },
+            })
+          }>
           <MaterialIcons name="add" size={30} color={colors.white} />
         </Pressable>
       </View>
@@ -164,6 +173,7 @@ export default function TabLayout() {
           backgroundColor: '#000000',
           borderTopWidth: 0,
           elevation: 0,
+          shadowOpacity: 0,
         },
       }}
       tabBar={(props) => <FloatingTabBar {...props} />}>
@@ -178,7 +188,8 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBarShell: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.xs,
+    alignItems: 'center',
   },
   tabBarRow: {
     flexDirection: 'row',
@@ -186,20 +197,26 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   pill: {
-    flex: 1,
+    width: 286,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderRadius: radius.round,
-    paddingVertical: spacing.sm,
+    backgroundColor: '#0B0B0F',
+    paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.xs,
+    borderWidth: 1,
+    borderColor: '#151518',
   },
   tabButton: {
-    flex: 1,
+    width: 66,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.xs,
-    borderRadius: radius.lg,
+    borderRadius: radius.round,
+  },
+  tabButtonActive: {
+    backgroundColor: '#151518',
   },
   tabInner: {
     alignItems: 'center',
@@ -216,17 +233,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   fab: {
-    width: 62,
-    height: 62,
+    width: 58,
+    height: 58,
     borderRadius: radius.round,
     backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.xs,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 1,
-    shadowRadius: 18,
-    elevation: 18,
+    marginBottom: spacing.xs + 2,
+    shadowColor: 'rgba(0, 0, 0, 0.24)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 14,
+    elevation: 12,
   },
 });

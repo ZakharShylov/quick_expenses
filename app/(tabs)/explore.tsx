@@ -601,7 +601,7 @@ export default function AnalyticsScreen() {
 const styles = StyleSheet.create({
   container: {
     minHeight: '100%',
-    paddingBottom: spacing.xxxl,
+    paddingBottom: 140,
   },
   controlsCard: {
     marginTop: spacing.lg,

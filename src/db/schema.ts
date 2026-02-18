@@ -37,6 +37,12 @@ export async function initDatabaseAsync() {
           key TEXT PRIMARY KEY NOT NULL,
           value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS custom_categories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT UNIQUE NOT NULL,
+          created_at TEXT NOT NULL
+        );
       `);
 
       await ensureAttachmentUriColumn();

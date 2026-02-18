@@ -1,4 +1,4 @@
-export const CATEGORIES = [
+export const DEFAULT_CATEGORIES = [
   'Groceries',
   'Transport',
   'Cafe',
@@ -20,7 +20,9 @@ export const CATEGORIES = [
   'Other',
 ] as const;
 
-export type ExpenseCategory = (typeof CATEGORIES)[number];
+export const CATEGORIES = DEFAULT_CATEGORIES;
+
+export type ExpenseCategory = (typeof DEFAULT_CATEGORIES)[number];
 
 export const CATEGORY_COLORS: Record<string, string> = {
   Groceries: '#3B82F6',

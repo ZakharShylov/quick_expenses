@@ -168,9 +168,8 @@ export default function TabLayout() {
             duration: 240,
           },
         },
-        tabBarBackground: () => null,
         tabBarStyle: {
-          backgroundColor: '#000000',
+          backgroundColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
@@ -190,6 +189,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
     alignItems: 'center',
+    backgroundColor: 'transparent',
   },
   tabBarRow: {
     flexDirection: 'row',

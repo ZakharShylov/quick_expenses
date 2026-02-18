@@ -168,11 +168,19 @@ export default function TabLayout() {
             duration: 240,
           },
         },
+        tabBarBackground: () => null,
         tabBarStyle: {
           backgroundColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+        },
+        sceneStyle: {
+          backgroundColor: 'transparent',
         },
       }}
       tabBar={(props) => <FloatingTabBar {...props} />}>

@@ -98,7 +98,9 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const activeRouteName = state.routes[state.index]?.name;
 
   return (
-    <View style={[styles.tabBarShell, { paddingBottom: Math.max(insets.bottom, spacing.sm) + 4 }]}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.tabBarShell, { paddingBottom: Math.max(insets.bottom, spacing.sm) + 4 }]}>
       <View style={styles.tabBarRow}>
         <View style={styles.pill}>
           {state.routes.map((route, index) => {
@@ -170,14 +172,16 @@ export default function TabLayout() {
         },
         tabBarBackground: () => null,
         tabBarStyle: {
-          backgroundColor: 'transparent',
-          borderTopWidth: 0,
-          elevation: 0,
-          shadowOpacity: 0,
           position: 'absolute',
           left: 0,
           right: 0,
           bottom: 0,
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          shadowColor: 'transparent',
+          elevation: 0,
+          shadowOpacity: 0,
+          shadowRadius: 0,
         },
         sceneStyle: {
           backgroundColor: 'transparent',
@@ -194,6 +198,10 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabBarShell: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
     alignItems: 'center',
@@ -215,6 +223,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     borderWidth: 1,
     borderColor: '#151518',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 10,
   },
   tabButton: {
     width: 66,
@@ -248,8 +261,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xs + 2,
-    shadowColor: 'rgba(0, 0, 0, 0.24)',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
     shadowRadius: 14,
     elevation: 12,
   },

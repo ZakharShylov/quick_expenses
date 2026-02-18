@@ -29,6 +29,8 @@ const ACTIVE_COLOR = '#FFFFFF';
 const INACTIVE_COLOR = 'rgba(255,255,255,0.5)';
 const ACTIVE_BG = 'rgba(255,255,255,0.12)';
 const ICON_SIZE = 21;
+const TAB_LABEL_SIZE = 11;
+const TAB_LABEL_LINE_HEIGHT = 13;
 
 type TabBarItemProps = {
   isFocused: boolean;
@@ -90,6 +92,8 @@ function TabBarItem({
         </View>
         <AppText
           variant="caption"
+          numberOfLines={1}
+          ellipsizeMode="tail"
           color={isFocused ? ACTIVE_COLOR : INACTIVE_COLOR}
           style={isFocused ? styles.tabLabelActive : styles.tabLabel}>
           {label}
@@ -237,19 +241,23 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   tabButton: {
-    width: 66,
+    flex: 1,
+    minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.xs,
     borderRadius: radius.round,
   },
   tabInner: {
+    width: '100%',
+    maxWidth: 64,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
     borderRadius: radius.round,
+    alignSelf: 'center',
     paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm + 2,
+    paddingHorizontal: spacing.xs,
   },
   iconStack: {
     width: ICON_SIZE,
@@ -263,12 +271,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabLabel: {
-    fontSize: 11,
-    lineHeight: 14,
+    width: '100%',
+    textAlign: 'center',
+    fontSize: TAB_LABEL_SIZE,
+    lineHeight: TAB_LABEL_LINE_HEIGHT,
+    letterSpacing: 0.15,
   },
   tabLabelActive: {
-    fontSize: 11,
-    lineHeight: 14,
+    width: '100%',
+    textAlign: 'center',
+    fontSize: TAB_LABEL_SIZE,
+    lineHeight: TAB_LABEL_LINE_HEIGHT,
+    letterSpacing: 0.15,
     fontWeight: '700',
   },
   fab: {

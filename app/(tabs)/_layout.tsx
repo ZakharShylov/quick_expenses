@@ -5,6 +5,7 @@ import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
+  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -25,7 +26,9 @@ const TAB_ITEMS: Record<string, { label: string; icon: TabIconName }> = {
 };
 
 const ACTIVE_COLOR = '#FFFFFF';
-const INACTIVE_COLOR = '#9CA3AF';
+const INACTIVE_COLOR = 'rgba(255,255,255,0.5)';
+const ACTIVE_BG = 'rgba(255,255,255,0.12)';
+const ICON_SIZE = 21;
 
 type TabBarItemProps = {
   isFocused: boolean;
@@ -50,17 +53,21 @@ function TabBarItem({
 
   useEffect(() => {
     focusProgress.value = withTiming(isFocused ? 1 : 0, {
-      duration: 220,
+      duration: 240,
       easing: Easing.out(Easing.cubic),
     });
   }, [focusProgress, isFocused]);
 
   const itemAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: (1 - focusProgress.value) * 3 }],
+    backgroundColor: interpolateColor(focusProgress.value, [0, 1], ['rgba(255,255,255,0)', ACTIVE_BG]),
   }));
 
-  const iconAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: (1 - focusProgress.value) * 2 }],
+  const activeIconStyle = useAnimatedStyle(() => ({
+    opacity: focusProgress.value,
+  }));
+
+  const inactiveIconStyle = useAnimatedStyle(() => ({
+    opacity: 1 - focusProgress.value,
   }));
 
   return (
@@ -71,16 +78,16 @@ function TabBarItem({
       testID={testID}
       onPress={onPress}
       onLongPress={onLongPress}
-      style={[styles.tabButton, isFocused && styles.tabButtonActive]}>
+      style={styles.tabButton}>
       <Animated.View style={[styles.tabInner, itemAnimatedStyle]}>
-        <Animated.View style={iconAnimatedStyle}>
-          <IconSymbol
-            name={icon}
-            size={isFocused ? 22 : 20}
-            color={isFocused ? ACTIVE_COLOR : INACTIVE_COLOR}
-            weight={isFocused ? 'semibold' : 'regular'}
-          />
-        </Animated.View>
+        <View style={styles.iconStack}>
+          <Animated.View style={[styles.iconLayer, inactiveIconStyle]}>
+            <IconSymbol name={icon} size={ICON_SIZE} color={INACTIVE_COLOR} weight="regular" />
+          </Animated.View>
+          <Animated.View style={[styles.iconLayer, activeIconStyle]}>
+            <IconSymbol name={icon} size={ICON_SIZE} color={ACTIVE_COLOR} weight="regular" />
+          </Animated.View>
+        </View>
         <AppText
           variant="caption"
           color={isFocused ? ACTIVE_COLOR : INACTIVE_COLOR}
@@ -218,7 +225,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderRadius: radius.round,
-    backgroundColor: '#0B0B0F',
+    backgroundColor: '#000000',
     paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.xs,
     borderWidth: 1,
@@ -236,13 +243,24 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: radius.round,
   },
-  tabButtonActive: {
-    backgroundColor: '#151518',
-  },
   tabInner: {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
+    borderRadius: radius.round,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm + 2,
+  },
+  iconStack: {
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabLabel: {
     fontSize: 11,

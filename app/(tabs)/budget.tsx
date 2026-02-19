@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Keyboard, Platform, StyleSheet, TextInput, TouchableWithoutFeedback, View } from 'react-native';
+import { Keyboard, StyleSheet, TextInput, TouchableWithoutFeedback, View } from 'react-native';
 
 import { getTopSpendingDays, getTotal, TopSpendingDayRow } from '@/src/db/analytics';
 import {
@@ -12,10 +12,12 @@ import {
 import { useCurrency } from '@/src/providers/CurrencyProvider';
 import { colors, radius, spacing } from '@/src/theme';
 import { getMonthRange } from '@/src/utils/dateRanges';
-import { formatMoney } from '@/src/utils/money';
+import { CurrencyCode, formatMoney, getCurrencySymbol } from '@/src/utils/money';
 import { AppText } from '@/src/ui/AppText';
 import { Card } from '@/src/ui/Card';
 import { Screen } from '@/src/ui/Screen';
+
+const MAX_BUDGET_DIGITS = 9;
 
 function getCurrentMonthKey(date: Date) {
   const year = date.getFullYear();
@@ -30,7 +32,14 @@ function parseBudgetInput(value: string) {
 }
 
 function sanitizeBudgetInput(value: string) {
-  return value.replace(/[^0-9]/g, '');
+  return value.replace(/[^0-9]/g, '').slice(0, MAX_BUDGET_DIGITS);
+}
+
+function formatBudgetDisplay(value: string) {
+  if (!value) return '';
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return value;
+  return parsed.toLocaleString('en-US');
 }
 
 function getProgressColor(progress: number) {
@@ -52,10 +61,41 @@ function formatTopDayLabel(isoDate: string) {
   });
 }
 
+function formatCompactCurrency(amount: number, currencyCode: CurrencyCode) {
+  const normalizedAmount = Number.isFinite(amount) ? amount : 0;
+  const absAmount = Math.abs(normalizedAmount);
+
+  if (absAmount < 1_000) {
+    return formatMoney(normalizedAmount, currencyCode);
+  }
+
+  const symbol = getCurrencySymbol(currencyCode);
+  const sign = normalizedAmount < 0 ? '-' : '';
+  let divisor = 1_000;
+  let suffix = 'K';
+
+  if (absAmount >= 1_000_000_000) {
+    divisor = 1_000_000_000;
+    suffix = 'B';
+  } else if (absAmount >= 1_000_000) {
+    divisor = 1_000_000;
+    suffix = 'M';
+  }
+
+  const compactValue = absAmount / divisor;
+  const roundedValue = compactValue >= 100 ? Math.round(compactValue) : Math.round(compactValue * 10) / 10;
+  const displayValue = Number.isInteger(roundedValue)
+    ? String(roundedValue)
+    : roundedValue.toFixed(1).replace(/\.0$/, '');
+
+  return `${sign}${symbol}${displayValue}${suffix}`;
+}
+
 export default function BudgetScreen() {
   const { currencyCode } = useCurrency();
   const [monthKey, setMonthKey] = useState('');
-  const [budgetInput, setBudgetInput] = useState('');
+  const [rawBudget, setRawBudget] = useState('');
+  const [isBudgetFocused, setIsBudgetFocused] = useState(false);
   const [monthlyBudget, setMonthlyBudget] = useState<number | null>(null);
   const [spentThisMonth, setSpentThisMonth] = useState(0);
   const [topSpendingDays, setTopSpendingDays] = useState<TopSpendingDayRow[]>([]);
@@ -82,9 +122,12 @@ export default function BudgetScreen() {
         getTopSpendingDays(fromISO, toISO, 10),
       ]);
 
+      const normalizedBudget = savedBudget === null ? '' : sanitizeBudgetInput(String(savedBudget));
+      const parsedNormalizedBudget = parseBudgetInput(normalizedBudget);
+
       setMonthKey(currentMonthKey);
-      setMonthlyBudget(savedBudget);
-      setBudgetInput(savedBudget === null ? '' : String(savedBudget));
+      setMonthlyBudget(parsedNormalizedBudget);
+      setRawBudget(normalizedBudget);
       setSpentThisMonth(spent);
       setTopSpendingDays(topDays);
     } catch {
@@ -102,7 +145,7 @@ export default function BudgetScreen() {
 
   const handleChangeBudget = useCallback((value: string) => {
     const sanitizedValue = sanitizeBudgetInput(value);
-    setBudgetInput(sanitizedValue);
+    setRawBudget(sanitizedValue);
 
     if (!sanitizedValue) {
       setMonthlyBudget(null);
@@ -116,6 +159,8 @@ export default function BudgetScreen() {
     setMonthlyBudget(parsed);
     void setMonthlyBudgetSetting(parsed);
   }, []);
+
+  const displayBudget = useMemo(() => formatBudgetDisplay(rawBudget), [rawBudget]);
 
   const remaining = useMemo(() => {
     if (!monthlyBudget || monthlyBudget <= 0) return 0;
@@ -143,34 +188,48 @@ export default function BudgetScreen() {
             </AppText>
 
             <TextInput
-              value={budgetInput}
+              value={isBudgetFocused ? rawBudget : displayBudget}
               onChangeText={handleChangeBudget}
-              keyboardType={Platform.OS === 'ios' ? 'number-pad' : 'numeric'}
+              keyboardType="number-pad"
               inputMode="numeric"
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
+              onFocus={() => setIsBudgetFocused(true)}
+              onBlur={() => setIsBudgetFocused(false)}
+              onEndEditing={() => setIsBudgetFocused(false)}
+              maxLength={MAX_BUDGET_DIGITS}
               placeholder="500"
               placeholderTextColor={colors.textSecondary}
               style={styles.input}
             />
 
-            <View style={styles.values}>
-              <View style={styles.valueRow}>
-                <AppText variant="body" color={colors.textSecondary}>
-                  Spent this month
-                </AppText>
-                <AppText variant="body">{formatMoney(spentThisMonth, currencyCode)}</AppText>
-              </View>
+              <View style={styles.values}>
+                <View style={styles.valueRow}>
+                  <AppText variant="body" color={colors.textSecondary} style={styles.valueLabel}>
+                    Spent this month
+                  </AppText>
+                  <AppText
+                    variant="body"
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    style={styles.valueAmount}>
+                    {formatCompactCurrency(spentThisMonth, currencyCode)}
+                  </AppText>
+                </View>
 
-              <View style={styles.valueRow}>
-                <AppText variant="body" color={colors.textSecondary}>
-                  Remaining
-                </AppText>
-                <AppText variant="body" style={styles.remainingValue}>
-                  {formatMoney(remaining, currencyCode)}
-                </AppText>
+                <View style={styles.valueRow}>
+                  <AppText variant="body" color={colors.textSecondary} style={styles.valueLabel}>
+                    Remaining
+                  </AppText>
+                  <AppText
+                    variant="body"
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    style={[styles.valueAmount, styles.remainingValue]}>
+                    {formatCompactCurrency(remaining, currencyCode)}
+                  </AppText>
+                </View>
               </View>
-            </View>
 
             <View style={styles.progressTrack}>
               <View
@@ -250,6 +309,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  valueLabel: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  valueAmount: {
+    flexShrink: 1,
+    minWidth: 0,
+    textAlign: 'right',
   },
   remainingValue: {
     fontWeight: '700',

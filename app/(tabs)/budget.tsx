@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Keyboard, StyleSheet, TextInput, TouchableWithoutFeedback, View } from 'react-native';
+import { Keyboard, Platform, StyleSheet, TextInput, TouchableWithoutFeedback, View } from 'react-native';
 
 import { getTopSpendingDays, getTotal, TopSpendingDayRow } from '@/src/db/analytics';
 import {
@@ -24,10 +24,13 @@ function getCurrentMonthKey(date: Date) {
 }
 
 function parseBudgetInput(value: string) {
-  const normalized = value.replace(',', '.');
-  const parsed = Number(normalized);
+  const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) return null;
   return parsed;
+}
+
+function sanitizeBudgetInput(value: string) {
+  return value.replace(/[^0-9]/g, '');
 }
 
 function getProgressColor(progress: number) {
@@ -98,15 +101,16 @@ export default function BudgetScreen() {
   );
 
   const handleChangeBudget = useCallback((value: string) => {
-    setBudgetInput(value);
+    const sanitizedValue = sanitizeBudgetInput(value);
+    setBudgetInput(sanitizedValue);
 
-    if (!value.trim()) {
+    if (!sanitizedValue) {
       setMonthlyBudget(null);
       void setMonthlyBudgetSetting(null);
       return;
     }
 
-    const parsed = parseBudgetInput(value);
+    const parsed = parseBudgetInput(sanitizedValue);
     if (parsed === null) return;
 
     setMonthlyBudget(parsed);
@@ -141,9 +145,9 @@ export default function BudgetScreen() {
             <TextInput
               value={budgetInput}
               onChangeText={handleChangeBudget}
-              keyboardType="decimal-pad"
+              keyboardType={Platform.OS === 'ios' ? 'number-pad' : 'numeric'}
+              inputMode="numeric"
               returnKeyType="done"
-              blurOnSubmit
               onSubmitEditing={Keyboard.dismiss}
               placeholder="500"
               placeholderTextColor={colors.textSecondary}

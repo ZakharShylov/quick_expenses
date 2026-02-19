@@ -61,6 +61,12 @@ type CategoryListItem =
   | { type: 'category'; key: string; value: string; isCustom: boolean }
   | { type: 'action'; key: string };
 
+const MAX_AMOUNT_DIGITS = 10;
+
+function sanitizeAmountInput(value: string) {
+  return value.replace(/[^0-9]/g, '').slice(0, MAX_AMOUNT_DIGITS);
+}
+
 export default function AddExpenseScreen() {
   const router = useRouter();
   const { currencyCode } = useCurrency();
@@ -284,7 +290,7 @@ export default function AddExpenseScreen() {
   }, [isPickingAttachment, isSaving, runAttachmentPicker]);
 
   const handleSave = async () => {
-    const parsedAmount = Number(amount.replace(',', '.'));
+    const parsedAmount = Number(amount);
 
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       setAmountError('Amount must be greater than 0');
@@ -398,19 +404,26 @@ export default function AddExpenseScreen() {
               <AppText variant="caption" color={colors.textSecondary}>
                 Amount ({currencyCode})
               </AppText>
-              <TextInput
-                style={styles.amountInput}
-                value={amount}
-                onChangeText={(value) => {
-                  setAmount(value);
-                  if (amountError) setAmountError('');
-                }}
-                keyboardType="decimal-pad"
-                returnKeyType="done"
-                onSubmitEditing={Keyboard.dismiss}
-                placeholder={`${currencySymbol}0.00`}
-                placeholderTextColor={colors.textSecondary}
-              />
+              <View style={styles.amountInputRow}>
+                <TextInput
+                  style={styles.amountInput}
+                  value={amount}
+                  onChangeText={(value) => {
+                    setAmount(sanitizeAmountInput(value));
+                    if (amountError) setAmountError('');
+                  }}
+                  keyboardType={Platform.OS === 'ios' ? 'number-pad' : 'numeric'}
+                  inputMode="numeric"
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
+                  maxLength={MAX_AMOUNT_DIGITS}
+                  placeholder="0"
+                  placeholderTextColor={colors.textSecondary}
+                />
+                <AppText variant="title" style={styles.amountSuffix}>
+                  {currencySymbol}
+                </AppText>
+              </View>
               {!!amountError && (
                 <AppText variant="caption" color={colors.danger} style={styles.errorText}>
                   {amountError}
@@ -463,6 +476,7 @@ export default function AddExpenseScreen() {
                 placeholder="Add a note"
                 placeholderTextColor={colors.textSecondary}
                 multiline
+                numberOfLines={2}
                 textAlignVertical="top"
                 onFocus={() => {
                   requestAnimationFrame(() => {
@@ -706,12 +720,25 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     padding: spacing.lg,
   },
-  amountInput: {
+  amountInputRow: {
     marginTop: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  amountInput: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 34,
     fontWeight: '700',
     color: colors.textPrimary,
     paddingVertical: spacing.xs,
+    paddingRight: spacing.md,
+  },
+  amountSuffix: {
+    color: colors.textSecondary,
+    fontSize: 30,
+    lineHeight: 36,
+    fontWeight: '700',
   },
   fieldCard: {
     padding: spacing.lg,
@@ -747,7 +774,10 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   noteInput: {
-    minHeight: 56,
+    minHeight: 48,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+    lineHeight: 20,
     textAlignVertical: 'top',
   },
   attachmentActions: {
